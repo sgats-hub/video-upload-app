@@ -398,87 +398,121 @@ def compress_video(input_path, output_path):
 # API路由
 @app.route('/api/upload', methods=['POST'])
 def upload_video():
-    print("收到上传请求")
-    print("请求方法:", request.method)
-    print("请求表单:", request.form)
-    print("请求文件:", request.files)
-    # 检查是否为管理员
-    data = request.form
-    username = data.get('username')
-    password = data.get('password')
-    category_id = data.get('category_id', 1)
-    
-    user = User.query.filter_by(username=username).first()
-    if not user or not check_password_hash(user.password, password) or user.role != 'admin':
-        return jsonify({'success': False, 'error': '无权限上传'}), 403
-    
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
-    # 验证文件类型（检查实际内容）
-    mime_type = validate_file_type(file)
-    if mime_type not in ALLOWED_MIME_TYPES:
-        return jsonify({'success': False, 'error': '不支持的文件类型，请上传视频文件'}), 400
-    
-    # 检查文件大小
-    file.seek(0, os.SEEK_END)
-    file_size = file.tell()
-    file.seek(0)
-    
-    if file_size > MAX_FILE_SIZE:
-        return jsonify({'success': False, 'error': f'文件大小超过限制（最大5GB）'}), 400
-    
-    # 检查视频数量限制
-    video_count = Video.query.count()
-    if video_count >= MAX_VIDEO_COUNT:
-        return jsonify({'success': False, 'error': f'视频数量已达上限（最多{MAX_VIDEO_COUNT}个）'}), 400
-    
-    # 生成唯一文件名
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    ext = os.path.splitext(file.filename)[1].lower()
-    new_filename = f"{timestamp}.mp4"  # 统一转换为MP4格式
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
-    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{timestamp}_temp{ext}")
-    
-    # 先保存原始文件到临时位置
-    file.save(temp_path)
-    
-    # 压缩视频（如果 ffmpeg 可用）
-    if FFMPEG_AVAILABLE and ext in ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv']:
-        success, message = compress_video(temp_path, file_path)
-        if not success:
-            # 压缩失败，使用原始文件
-            os.rename(temp_path, file_path)
-            print(f"压缩失败，使用原始文件: {message}")
+    try:
+        print("=" * 50)
+        print(f"[{datetime.now()}] 收到上传请求")
+        print("请求方法:", request.method)
+        print("客户端IP:", request.remote_addr)
+        print("请求表单键:", list(request.form.keys()))
+        print("请求文件:", request.files)
+        
+        # 检查是否为管理员
+        data = request.form
+        username = data.get('username')
+        password = data.get('password')
+        category_id = data.get('category_id', 1)
+        
+        print(f"用户名: {username}")
+        print(f"分类ID: {category_id}")
+        
+        user = User.query.filter_by(username=username).first()
+        if not user or not check_password_hash(user.password, password) or user.role != 'admin':
+            print("错误: 无权限上传")
+            return jsonify({'success': False, 'error': '无权限上传'}), 403
+        
+        if 'file' not in request.files:
+            print("错误: 没有上传文件")
+            return jsonify({'success': False, 'error': '请选择要上传的文件'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            print("错误: 文件名为空")
+            return jsonify({'success': False, 'error': '请选择要上传的文件'}), 400
+        
+        # 验证文件类型（检查实际内容）
+        mime_type = validate_file_type(file)
+        print(f"检测到文件类型: {mime_type}")
+        if mime_type not in ALLOWED_MIME_TYPES:
+            print(f"错误: 不支持的文件类型 {mime_type}")
+            return jsonify({'success': False, 'error': '不支持的文件类型，请上传视频文件（MP4、AVI、MOV等）'}), 400
+        
+        # 检查文件大小
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        print(f"文件大小: {file_size / (1024 * 1024):.2f} MB")
+        
+        if file_size > MAX_FILE_SIZE:
+            print(f"错误: 文件大小超过限制")
+            return jsonify({'success': False, 'error': f'文件大小超过限制（最大5GB）'}), 400
+        
+        if file_size > 500 * 1024 * 1024:  # 前端限制500MB
+            print(f"错误: 文件大小超过前端限制")
+            return jsonify({'success': False, 'error': f'文件大小超过限制（最大500MB）'}), 400
+        
+        # 检查视频数量限制
+        video_count = Video.query.count()
+        if video_count >= MAX_VIDEO_COUNT:
+            print(f"错误: 视频数量已达上限")
+            return jsonify({'success': False, 'error': f'视频数量已达上限（最多{MAX_VIDEO_COUNT}个）'}), 400
+        
+        # 生成唯一文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        ext = os.path.splitext(file.filename)[1].lower()
+        new_filename = f"{timestamp}.mp4"  # 统一转换为MP4格式
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{timestamp}_temp{ext}")
+        
+        print(f"保存路径: {file_path}")
+        
+        # 先保存原始文件到临时位置
+        file.save(temp_path)
+        print("原始文件保存成功")
+        
+        # 压缩视频（如果 ffmpeg 可用）
+        if FFMPEG_AVAILABLE and ext in ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv']:
+            print("开始压缩视频...")
+            success, message = compress_video(temp_path, file_path)
+            if not success:
+                # 压缩失败，使用原始文件
+                os.rename(temp_path, file_path)
+                print(f"压缩失败，使用原始文件: {message}")
+            else:
+                # 压缩成功，删除临时文件
+                os.remove(temp_path)
+                print("视频压缩成功")
         else:
-            # 压缩成功，删除临时文件
-            os.remove(temp_path)
-    else:
-        # ffmpeg 不可用或非视频文件，直接重命名
-        os.rename(temp_path, file_path)
-        if not FFMPEG_AVAILABLE:
-            print("ffmpeg 不可用，跳过视频压缩")
-    
-    # 保存到数据库
-    video = Video(
-        filename=new_filename,
-        original_name=file.filename,
-        size=os.path.getsize(file_path),
-        duration='00:00',
-        uploaded_by=user.id,
-        category_id=int(category_id)
-    )
-    db.session.add(video)
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'video': video.to_dict()
-    })
+            # ffmpeg 不可用或非视频文件，直接重命名
+            os.rename(temp_path, file_path)
+            if not FFMPEG_AVAILABLE:
+                print("ffmpeg 不可用，跳过视频压缩")
+        
+        # 保存到数据库
+        video = Video(
+            filename=new_filename,
+            original_name=file.filename,
+            size=os.path.getsize(file_path),
+            duration='00:00',
+            uploaded_by=user.id,
+            category_id=int(category_id)
+        )
+        db.session.add(video)
+        db.session.commit()
+        
+        print(f"视频上传成功: {video.filename}")
+        print("=" * 50)
+        
+        return jsonify({
+            'success': True,
+            'video': video.to_dict()
+        })
+        
+    except Exception as e:
+        print(f"[{datetime.now()}] 上传异常: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'服务器内部错误: {str(e)}'}), 500
 
 @app.route('/api/videos', methods=['GET'])
 def get_videos():

@@ -106,7 +106,17 @@ const processFile = async (file) => {
   uploadProgress.value = 0
   uploadStatus.value = '正在上传...'
   
-  await uploadToServer(file)
+  try {
+    const result = await uploadToServerWithProgress(file)
+    uploadedVideo.value = result
+    isUploading.value = false
+    emit('upload-success', result)
+  } catch (error) {
+    console.error('上传失败:', error)
+    uploadStatus.value = `上传失败: ${error.message}`
+    isUploading.value = false
+    alert(`上传失败: ${error.message}`)
+  }
 }
 
 const uploadToServer = async (file) => {
@@ -128,19 +138,45 @@ const uploadToServer = async (file) => {
     
     const response = await fetch('/api/upload', {
       method: 'POST',
-      body: formData
+      body: formData,
+      signal: AbortController.timeout(300000)  // 5分钟超时
     })
     
-    console.log('响应状态:', response.status, response.statusText)
+    // 检查响应状态
+    if (!response.ok) {
+      throw new Error(`服务器错误: ${response.status} ${response.statusText}`)
+    }
     
-    const text = await response.text()
-    console.log('响应内容:', text)
+    // 如果响应有Content-Length，尝试获取进度
+    const contentLength = response.headers.get('Content-Length')
+    
+    let resultText = ''
+    const reader = response.body?.getReader()
+    if (reader) {
+      let receivedLength = 0
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        receivedLength += value.length
+        resultText += new TextDecoder().decode(value, { stream: true })
+        
+        // 更新进度（上传完成后，服务器处理阶段）
+        if (contentLength) {
+          const progress = Math.min(99, Math.round((receivedLength / parseInt(contentLength)) * 10))
+          uploadProgress.value = Math.max(uploadProgress.value, 90 + progress)
+        }
+      }
+    } else {
+      resultText = await response.text()
+    }
+    
+    console.log('响应内容:', resultText)
     
     let result
     try {
-      result = JSON.parse(text)
+      result = JSON.parse(resultText)
     } catch (e) {
-      throw new Error('服务器返回的不是有效的JSON: ' + text.substring(0, 100))
+      throw new Error('服务器返回的不是有效的JSON: ' + resultText.substring(0, 100))
     }
     
     if (result.success) {
@@ -161,6 +197,64 @@ const uploadToServer = async (file) => {
     isUploading.value = false
     alert(`上传失败: ${error.message}`)
   }
+}
+
+// 使用XMLHttpRequest实现带进度的上传
+const uploadToServerWithProgress = async (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('username', props.username)
+  formData.append('password', props.password)
+  formData.append('category_id', selectedCategory.value)
+  
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 90)  // 前90%是上传进度
+        uploadProgress.value = percent
+        uploadStatus.value = `正在上传... ${percent}%`
+        console.log(`上传进度: ${percent}%`)
+      }
+    })
+    
+    xhr.upload.addEventListener('error', (event) => {
+      reject(new Error('网络上传错误'))
+    })
+    
+    xhr.upload.addEventListener('abort', (event) => {
+      reject(new Error('上传被取消'))
+    })
+    
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === XMLHttpRequest.DONE) {
+        uploadProgress.value = 95  // 服务器处理中
+        uploadStatus.value = '服务器处理中...'
+        
+        if (xhr.status === 200) {
+          try {
+            const result = JSON.parse(xhr.responseText)
+            if (result.success) {
+              uploadProgress.value = 100
+              uploadStatus.value = '上传完成'
+              resolve(result.video)
+            } else {
+              reject(new Error(result.error || '上传失败'))
+            }
+          } catch (e) {
+            reject(new Error('服务器返回的不是有效的JSON'))
+          }
+        } else {
+          reject(new Error(`服务器错误: ${xhr.status} ${xhr.statusText}`))
+        }
+      }
+    }
+    
+    xhr.timeout = 300000  // 5分钟超时
+    xhr.open('POST', '/api/upload')
+    xhr.send(formData)
+  })
 }
 
 const resetUpload = () => {
