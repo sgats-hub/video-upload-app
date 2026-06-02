@@ -170,6 +170,8 @@ const deleteVideo = async (id) => {
   if (!confirm('确定要删除这个视频吗？')) return
   
   try {
+    console.log(`[删除视频] ID: ${id}, 用户名: ${props.username}`)
+    
     const response = await fetch(`/api/videos/${id}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -179,7 +181,10 @@ const deleteVideo = async (id) => {
       })
     })
     
+    console.log(`[删除视频] 响应状态码: ${response.status}`)
+    
     const result = await response.json()
+    console.log(`[删除视频] 响应结果:`, result)
     
     if (result.success) {
       emit('delete-video', id)
@@ -188,7 +193,8 @@ const deleteVideo = async (id) => {
       alert(result.error || '删除失败')
     }
   } catch (error) {
-    alert('删除失败')
+    console.error('[删除视频] 错误:', error)
+    alert(`删除失败: ${error.message || '网络错误'}`)
   }
 }
 </script>
