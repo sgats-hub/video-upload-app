@@ -46,14 +46,6 @@
 import { ref } from 'vue'
 
 const props = defineProps({
-  username: {
-    type: String,
-    required: true
-  },
-  password: {
-    type: String,
-    required: true
-  },
   categories: {
     type: Array,
     default: () => []
@@ -122,24 +114,21 @@ const processFile = async (file) => {
 const uploadToServer = async (file) => {
   const formData = new FormData()
   formData.append('file', file)
-  formData.append('username', props.username)
-  formData.append('password', props.password)
   formData.append('category_id', selectedCategory.value)
-  
+
   try {
     console.log('开始上传，目标地址:', '/api/upload')
     console.log('表单数据:', {
-      username: props.username,
-      password: props.password ? '***' : '',
       category_id: selectedCategory.value,
       filename: file.name,
       size: file.size
     })
-    
+
     const response = await fetch('/api/upload', {
       method: 'POST',
       body: formData,
-      signal: AbortController.timeout(300000)  // 5分钟超时
+      credentials: 'include',
+      signal: AbortSignal.timeout(300000)
     })
     
     // 检查响应状态
@@ -203,16 +192,14 @@ const uploadToServer = async (file) => {
 const uploadToServerWithProgress = async (file) => {
   const formData = new FormData()
   formData.append('file', file)
-  formData.append('username', props.username)
-  formData.append('password', props.password)
   formData.append('category_id', selectedCategory.value)
-  
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    
+
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
-        const percent = Math.round((event.loaded / event.total) * 90)  // 前90%是上传进度
+        const percent = Math.round((event.loaded / event.total) * 90)
         uploadProgress.value = percent
         uploadStatus.value = `正在上传... ${percent}%`
         console.log(`上传进度: ${percent}%`)

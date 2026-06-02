@@ -85,14 +85,6 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  username: {
-    type: String,
-    default: ''
-  },
-  password: {
-    type: String,
-    default: ''
-  },
   categories: {
     type: Array,
     default: () => []
@@ -134,14 +126,13 @@ const saveVideo = async () => {
     alert('视频名称不能为空')
     return
   }
-  
+
   try {
     const response = await fetch(`/api/videos/${editingVideo.value.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
-        username: props.username,
-        password: props.password,
         name: editForm.value.name,
         category_id: editForm.value.category_id
       })
@@ -168,17 +159,14 @@ const saveVideo = async () => {
 
 const deleteVideo = async (id) => {
   if (!confirm('确定要删除这个视频吗？')) return
-  
+
   try {
-    console.log(`[删除视频] ID: ${id}, 用户名: ${props.username}`)
-    
+    console.log(`[删除视频] ID: ${id}`)
+
     const response = await fetch(`/api/videos/${id}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: props.username,
-        password: props.password
-      })
+      credentials: 'include'
     })
     
     console.log(`[删除视频] 响应状态码: ${response.status}`)

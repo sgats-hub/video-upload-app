@@ -73,9 +73,6 @@
           <input type="password" v-model="adminPassword" placeholder="密码" class="form-input" />
           <button class="login-btn" @click="adminLogin">登录</button>
           <p v-if="loginError" class="error-message">{{ loginError }}</p>
-          <div class="demo-info">
-            <p>默认账户：admin / admin123</p>
-          </div>
           <a href="/" class="back-link">← 返回观看页面</a>
         </div>
       </div>
@@ -96,8 +93,6 @@
         <main class="main-content admin-content">
           <div class="upload-section">
             <VideoUpload 
-              :username="adminUser.username"
-              :password="adminPassword"
               :categories="categories"
               @upload-success="handleUploadSuccess" 
             />
@@ -128,8 +123,6 @@
             <VideoList 
               :videos="videos" 
               :isAdmin="true"
-              :username="adminUser.username"
-              :password="adminPassword"
               :categories="categories"
               @delete-video="handleDeleteVideo"
               @video-updated="handleVideoUpdate"
@@ -388,6 +381,7 @@ const adminLogin = async () => {
     const response = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         username: adminUsername.value,
         password: adminPassword.value,
@@ -409,7 +403,15 @@ const adminLogin = async () => {
 }
 
 // 退出
-const adminLogout = () => {
+const adminLogout = async () => {
+  try {
+    await fetch('/api/logout', {
+      method: 'POST',
+      credentials: 'include'
+    })
+  } catch (e) {
+    // ignore
+  }
   adminUser.value = null
   adminUsername.value = ''
   adminPassword.value = ''
@@ -440,8 +442,8 @@ const changePassword = async () => {
     const response = await fetch('/api/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
-        username: adminUser.value.username,
         old_password: oldPassword.value,
         new_password: newPassword.value
       })
@@ -485,7 +487,7 @@ const openMessageBoard = async () => {
 
 const loadMessages = async () => {
   try {
-    const response = await fetch('/api/messages')
+    const response = await fetch('/api/messages', { credentials: 'include' })
     messages.value = await response.json()
   } catch (error) {
     console.error('加载留言失败:', error)
@@ -498,11 +500,12 @@ const submitMessage = async () => {
     messageError.value = '请输入留言内容'
     return
   }
-  
+
   try {
     const response = await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ content: newMessage.value })
     })
     
@@ -541,7 +544,7 @@ const loadVideos = async (page = 1, keyword = '', category_id = null) => {
     if (keyword) params.set('search', keyword)
     if (category_id) params.set('category_id', category_id)
     
-    const response = await fetch(`/api/videos?${params.toString()}`)
+    const response = await fetch(`/api/videos?${params.toString()}`, { credentials: 'include' })
     const result = await response.json()
     
     videos.value = result.items || result
@@ -555,7 +558,7 @@ const loadVideos = async (page = 1, keyword = '', category_id = null) => {
 
 const loadCategories = async () => {
   try {
-    const response = await fetch('/api/categories')
+    const response = await fetch('/api/categories', { credentials: 'include' })
     categories.value = await response.json()
   } catch (error) {
     categories.value = []
@@ -599,10 +602,7 @@ const handleDeleteVideo = async (id) => {
     await fetch(`/api/videos/${id}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: adminUser.value.username,
-        password: adminPassword.value
-      })
+      credentials: 'include'
     })
     videos.value = videos.value.filter(v => v.id !== id)
   } catch (error) {
@@ -615,16 +615,20 @@ const handleVideoUpdate = () => {
   loadVideos(currentPageNum.value, searchKeyword.value, selectedCategory.value)
 }
 
-onMounted(() => {
-  // 根据 URL 路径判断页面
+onMounted(async () => {
   const path = window.location.pathname
   if (path === '/console' || path === '/console/') {
     currentPage.value = 'admin'
   } else {
     currentPage.value = 'viewer'
+    await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ role: 'viewer' })
+    }).catch(() => {})
   }
-  
-  // 加载初始数据
+
   loadVideos()
   loadCategories()
 })

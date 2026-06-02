@@ -1,12 +1,17 @@
-from flask import Flask, request, jsonify, send_from_directory, abort
+from flask import Flask, request, jsonify, send_from_directory, abort, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import uuid
+import html
 import mimetypes
 from datetime import datetime, timedelta
-import threading  # 💡 引入多线程支持
+import logging
+import threading
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 简单的速率限制（基于IP）
 RATE_LIMIT = {}
@@ -22,12 +27,12 @@ except ImportError:
 
 app = Flask(__name__)
 
-# ✅ 修正一：CORS 配置加上了你的前端 8088 端口
+# CORS 配置
 CORS(app, supports_credentials=True, origins=[
-    "http://localhost:8088",  # 👈 你的 Nginx 前端本地端口
+    "http://localhost:8088",
     "http://localhost:5173",
     "http://localhost:5174",
-    "https://2minutevideos.com",  # 👈 你的正式域名
+    "https://2minutevideos.com",
     "https://www.2minutevideos.com",
     "http://2minutevideos.com",
     "http://www.2minutevideos.com"
@@ -37,8 +42,15 @@ CORS(app, supports_credentials=True, origins=[
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///videos.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret-key-change-in-production')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5GB
+
+_secret = os.environ.get('SECRET_KEY')
+if _secret:
+    app.config['SECRET_KEY'] = _secret
+else:
+    _secret = os.urandom(32).hex()
+    app.config['SECRET_KEY'] = _secret
+    logger.warning("SECRET_KEY 未设置，已使用随机值。生产环境请通过环境变量设置固定的 SECRET_KEY。")
 
 db = SQLAlchemy(app)
 
@@ -52,7 +64,6 @@ def set_security_headers(response):
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data:; media-src 'self'"
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     return response
 
@@ -77,6 +88,26 @@ ALLOWED_MIME_TYPES = {
     'video/mp4', 'video/avi', 'video/quicktime', 'video/x-ms-wmv',
     'video/x-flv', 'video/x-matroska', 'video/webm'
 }
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'error': '请先登录'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'error': '请先登录'}), 401
+        if session.get('role') != 'admin':
+            return jsonify({'success': False, 'error': '无权限操作'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
 # 验证文件MIME类型
 def validate_file_type(file):
@@ -186,33 +217,59 @@ def login():
     username = data.get('username')
     password = data.get('password')
     role = data.get('role', 'viewer')
-    
+
     if role == 'viewer':
+        session.clear()
+        session['user_id'] = 0
+        session['username'] = username or 'viewer'
+        session['role'] = 'viewer'
         return jsonify({'success': True, 'user': {'username': username or 'viewer', 'role': 'viewer'}})
-    
+
     user = User.query.filter_by(username=username).first()
     if user and check_password_hash(user.password, password) and user.role == 'admin':
+        session.clear()
+        session['user_id'] = user.id
+        session['username'] = user.username
+        session['role'] = user.role
         return jsonify({'success': True, 'user': user.to_dict()})
     return jsonify({'success': False, 'error': '用户名或密码错误'}), 401
 
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({'success': True, 'message': '已退出登录'})
+
 @app.route('/api/user', methods=['GET'])
 def get_user():
+    if 'user_id' in session and session['user_id'] > 0:
+        return jsonify({'success': True, 'user': {
+            'id': session['user_id'],
+            'username': session.get('username'),
+            'role': session.get('role')
+        }})
     return jsonify({'success': True, 'user': None})
 
 @app.route('/api/change-password', methods=['POST'])
+@login_required
 def change_password():
     data = request.json
-    username = data.get('username')
     old_password = data.get('old_password')
     new_password = data.get('new_password')
-    
-    user = User.query.filter_by(username=username).first()
-    if not user: return jsonify({'success': False, 'error': '用户不存在'}), 404
+
+    user = User.query.get(session['user_id'])
+    if not user:
+        return jsonify({'success': False, 'error': '用户不存在'}), 404
     if not check_password_hash(user.password, old_password):
         return jsonify({'success': False, 'error': '旧密码错误'}), 403
-    if not new_password or len(new_password) < 6:
-        return jsonify({'success': False, 'error': '新密码至少需要6位'}), 400
-    
+    if not new_password or len(new_password) < 8:
+        return jsonify({'success': False, 'error': '新密码至少需要8位'}), 400
+    if not any(c.isupper() for c in new_password):
+        return jsonify({'success': False, 'error': '新密码必须包含至少一个大写字母'}), 400
+    if not any(c.islower() for c in new_password):
+        return jsonify({'success': False, 'error': '新密码必须包含至少一个小写字母'}), 400
+    if not any(c.isdigit() for c in new_password):
+        return jsonify({'success': False, 'error': '新密码必须包含至少一个数字'}), 400
+
     user.password = generate_password_hash(new_password)
     db.session.commit()
     return jsonify({'success': True, 'message': '密码修改成功'})
@@ -246,14 +303,20 @@ def get_messages():
 def add_message():
     data = request.json
     content = data.get('content', '').strip()
-    if not content: return jsonify({'success': False, 'message': '留言内容不能为空'}), 400
+    if not content:
+        return jsonify({'success': False, 'message': '留言内容不能为空'}), 400
+    if len(content) > 2000:
+        return jsonify({'success': False, 'message': '留言内容过长（最多2000字）'}), 400
     if os.path.exists(MESSAGES_FILE) and os.path.getsize(MESSAGES_FILE) >= MAX_MESSAGES_SIZE:
         return jsonify({'success': False, 'message': '留言板已满，无法添加新留言'}), 400
     try:
+        safe_content = html.escape(content, quote=False)
         with open(MESSAGES_FILE, 'a', encoding='utf-8') as f:
-            f.write(f'[{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] {content}\n')
+            f.write(f'[{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}] {safe_content}\n')
         return jsonify({'success': True, 'message': '留言成功'})
-    except Exception as e: return jsonify({'success': False, 'message': f'保存留言失败: {str(e)}'}), 500
+    except Exception as e:
+        logger.error(f"保存留言失败: {e}")
+        return jsonify({'success': False, 'message': '保存留言失败，请稍后重试'}), 500
 
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 统一前后端为 500MB
 MAX_VIDEO_COUNT = 10000
@@ -309,76 +372,67 @@ def async_video_processing(app_context, temp_path, file_path, video_id, ext):
             db.session.commit()
 
 @app.route('/api/upload', methods=['POST'])
+@admin_required
 def upload_video():
     try:
         data = request.form
-        username = data.get('username')
-        password = data.get('password')
         category_id = data.get('category_id', 1)
-        
-        user = User.query.filter_by(username=username).first()
-        if not user or not check_password_hash(user.password, password) or user.role != 'admin':
-            return jsonify({'success': False, 'error': '无权限上传'}), 403
-        
+
         if 'file' not in request.files:
             return jsonify({'success': False, 'error': '请选择要上传的文件'}), 400
-        
+
         file = request.files['file']
         if file.filename == '':
             return jsonify({'success': False, 'error': '请选择要上传的文件'}), 400
-        
+
         file.seek(0, os.SEEK_END)
         file_size = file.tell()
         file.seek(0)
-        
+
         if file_size > MAX_FILE_SIZE:
             return jsonify({'success': False, 'error': '文件大小超过限制（最大500MB）'}), 400
-        
+
         mime_type = validate_file_type(file)
         if mime_type is None or mime_type not in ALLOWED_MIME_TYPES:
             return jsonify({'success': False, 'error': '不支持的文件类型，请上传视频文件'}), 400
-        
+
         if Video.query.count() >= MAX_VIDEO_COUNT:
             return jsonify({'success': False, 'error': '视频数量已达上限'}), 400
-        
+
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         ext = os.path.splitext(file.filename)[1].lower()
         new_filename = f"{timestamp}.mp4"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{timestamp}_temp{ext}")
-        
-        # 快速保存原始流到临时文件
+
         file.save(temp_path)
-        
-        # 先在数据库里建档挂号（状态为处理中 processing）
+
         video = Video(
             filename=new_filename,
             original_name=file.filename,
             size=file_size,
             duration='00:00',
-            uploaded_by=user.id,
+            uploaded_by=session['user_id'],
             category_id=int(category_id),
             status='processing'
         )
         db.session.add(video)
         db.session.commit()
-        
-        # 💡 ✅ 核心拯救：开启后台子线程异步执行 FFmpeg 转码，彻底解放主线程
-        # 传递 app_context 确保子线程有数据库访问权限
+
         thr = threading.Thread(
-            target=async_video_processing, 
+            target=async_video_processing,
             args=(app.app_context(), temp_path, file_path, video.id, ext)
         )
         thr.start()
-        
-        # 🚀 秒级给前端交卷，Cloudflare 100秒的 524 限制直接失效！
+
         return jsonify({
             'success': True,
             'video': video.to_dict()
         })
-        
+
     except Exception as e:
-        return jsonify({'success': False, 'error': f'服务器内部错误: {str(e)}'}), 500
+        logger.error(f"上传视频失败: {e}")
+        return jsonify({'success': False, 'error': '服务器内部错误，请稍后重试'}), 500
 
 @app.route('/api/videos', methods=['GET'])
 def get_videos():
@@ -402,79 +456,58 @@ def get_videos():
         'pages': paginated.pages
     })
 
-# ✅ 修正三：理顺并修复 video_actions 的 PUT/DELETE 分支嵌套逻辑
 @app.route('/api/videos/<int:id>', methods=['DELETE', 'PUT'])
+@admin_required
 def video_actions(id):
-    print(f"===== [{datetime.now()}] video_actions 请求 =====")
-    print(f"请求方法: {request.method}")
-    print(f"视频ID: {id}")
-    
-    data = request.json or {}
-    print(f"请求数据: {data}")
-    
-    username = data.get('username')
-    password = data.get('password')
-    
-    print(f"用户名: {username}")
-    
-    user = User.query.filter_by(username=username).first()
-    if not user:
-        print("错误: 用户不存在")
-        return jsonify({'success': False, 'error': '无权限操作'}), 403
-    
-    if not check_password_hash(user.password, password):
-        print("错误: 密码不正确")
-        return jsonify({'success': False, 'error': '无权限操作'}), 403
-    
-    if user.role != 'admin':
-        print("错误: 非管理员用户")
-        return jsonify({'success': False, 'error': '无权限操作'}), 403
-    
+    logger.info(f"video_actions: method={request.method}, video_id={id}")
+
     video = Video.query.get(id)
     if not video:
-        print("错误: 视频不存在")
+        logger.warning(f"视频不存在: {id}")
         return jsonify({'success': False, 'error': '视频不存在'}), 404
-    
+
     if request.method == 'DELETE':
-        print(f"开始删除视频: {video.filename}")
-        
+        logger.info(f"开始删除视频: {video.filename}")
+
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], video.filename)
-        # 同时也检查并清理可能遗留的临时转码文件
         temp_name = video.filename.replace('.mp4', '_temp')
         for f in os.listdir(app.config['UPLOAD_FOLDER']):
             if f.startswith(temp_name):
-                try: 
+                try:
                     os.remove(os.path.join(app.config['UPLOAD_FOLDER'], f))
-                    print(f"清理临时文件: {f}")
-                except Exception as e: 
-                    print(f"清理临时文件失败: {e}")
-                
+                    logger.info(f"清理临时文件: {f}")
+                except Exception as e:
+                    logger.warning(f"清理临时文件失败: {e}")
+
         if os.path.exists(file_path):
             os.remove(file_path)
-            print(f"已删除文件: {file_path}")
-        
+            logger.info(f"已删除文件: {file_path}")
+
         db.session.delete(video)
         db.session.commit()
-        print(f"视频 {id} 删除成功")
+        logger.info(f"视频 {id} 删除成功")
         return jsonify({'success': True})
-    
+
     elif request.method == 'PUT':
+        data = request.json or {}
         new_name = data.get('name')
         category_id = data.get('category_id')
-        
+
         if not new_name:
             return jsonify({'success': False, 'error': '视频名称不能为空'}), 400
-        
+
         video.original_name = new_name
         if category_id is not None and category_id != '' and category_id != 'null':
             video.category_id = int(category_id)
-        
+
         db.session.commit()
         return jsonify({'success': True, 'video': video.to_dict()})
 
 @app.route('/api/videos/<filename>', methods=['GET'])
+@login_required
 def serve_video(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
+    app.run(debug=debug_mode, port=5000)
