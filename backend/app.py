@@ -318,7 +318,8 @@ def add_message():
         logger.error(f"保存留言失败: {e}")
         return jsonify({'success': False, 'message': '保存留言失败，请稍后重试'}), 500
 
-MAX_FILE_SIZE = 500 * 1024 * 1024  # 统一前后端为 500MB
+MAX_FILE_SIZE = 500 * 1024 * 1024  # 普通视频最大500MB
+MAX_FILE_SIZE_BIOGRAPHY = 3 * 1024 * 1024 * 1024  # 人物传记类视频最大3GB
 MAX_VIDEO_COUNT = 10000
 
 # ✅ 修正二：后台多线程异步压缩函数（不阻塞主响应）
@@ -389,8 +390,13 @@ def upload_video():
         file_size = file.tell()
         file.seek(0)
 
-        if file_size > MAX_FILE_SIZE:
-            return jsonify({'success': False, 'error': '文件大小超过限制（最大500MB）'}), 400
+        biography_category_id = 5
+        if int(category_id) == biography_category_id:
+            if file_size > MAX_FILE_SIZE_BIOGRAPHY:
+                return jsonify({'success': False, 'error': '文件大小超过限制（人物传记类最大3GB）'}), 400
+        else:
+            if file_size > MAX_FILE_SIZE:
+                return jsonify({'success': False, 'error': '文件大小超过限制（最大500MB）'}), 400
 
         mime_type = validate_file_type(file)
         if mime_type is None or mime_type not in ALLOWED_MIME_TYPES:
