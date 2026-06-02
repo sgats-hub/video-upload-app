@@ -65,7 +65,7 @@ const selectedCategory = ref(props.categories[0]?.id || 1)
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024
 const MAX_FILE_SIZE_BIOGRAPHY = 3 * 1024 * 1024 * 1024
-const BIOGRAPHY_CATEGORY_ID = 5
+const BIOGRAPHY_CATEGORY_ID = '5'
 
 const maxFileSizeText = () => {
   return selectedCategory.value === BIOGRAPHY_CATEGORY_ID ? '3GB' : '500MB'
@@ -96,8 +96,9 @@ const handleDrop = (event) => {
 }
 
 const processFile = async (file) => {
-  const maxSize = selectedCategory.value === BIOGRAPHY_CATEGORY_ID ? MAX_FILE_SIZE_BIOGRAPHY : MAX_FILE_SIZE
-  const maxSizeText = selectedCategory.value === BIOGRAPHY_CATEGORY_ID ? '3GB' : '500MB'
+  const isBiography = selectedCategory.value === BIOGRAPHY_CATEGORY_ID
+  const maxSize = isBiography ? MAX_FILE_SIZE_BIOGRAPHY : MAX_FILE_SIZE
+  const maxSizeText = isBiography ? '3GB' : '500MB'
   
   if (file.size > maxSize) {
     alert(`文件大小超过限制（最大${maxSizeText}）`)
