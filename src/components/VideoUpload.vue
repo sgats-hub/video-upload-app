@@ -16,7 +16,7 @@
         <div class="upload-icon">📤</div>
         <h3>点击或拖拽视频文件到此处</h3>
         <p>支持 MP4, WebM, AVI, MOV 等格式</p>
-        <p class="hint">最大文件大小: {{ maxFileSizeText }}</p>
+        <p class="hint">最大文件大小: {{ maxFileSizeText() }}</p>
         <input type="file" ref="fileInput" accept="video/*" class="file-input" @change="handleFileSelect" />
       </div>
       
