@@ -16,7 +16,7 @@
         <div class="upload-icon">📤</div>
         <h3>点击或拖拽视频文件到此处</h3>
         <p>支持 MP4, WebM, AVI, MOV 等格式</p>
-        <p class="hint">最大文件大小: 500MB</p>
+        <p class="hint">最大文件大小: {{ maxFileSizeText }}</p>
         <input type="file" ref="fileInput" accept="video/*" class="file-input" @change="handleFileSelect" />
       </div>
       
@@ -63,6 +63,14 @@ const uploadStatus = ref('')
 const uploadedVideo = ref(null)
 const selectedCategory = ref(props.categories[0]?.id || 1)
 
+const MAX_FILE_SIZE = 500 * 1024 * 1024
+const MAX_FILE_SIZE_BIOGRAPHY = 3 * 1024 * 1024 * 1024
+const BIOGRAPHY_CATEGORY_ID = 5
+
+const maxFileSizeText = () => {
+  return selectedCategory.value === BIOGRAPHY_CATEGORY_ID ? '3GB' : '500MB'
+}
+
 const getCategoryName = (categoryId) => {
   const cat = props.categories.find(c => c.id === categoryId)
   return cat ? `${cat.icon} ${cat.name}` : '未分类'
@@ -88,8 +96,11 @@ const handleDrop = (event) => {
 }
 
 const processFile = async (file) => {
-  if (file.size > 500 * 1024 * 1024) {
-    alert('文件大小超过限制（最大500MB）')
+  const maxSize = selectedCategory.value === BIOGRAPHY_CATEGORY_ID ? MAX_FILE_SIZE_BIOGRAPHY : MAX_FILE_SIZE
+  const maxSizeText = selectedCategory.value === BIOGRAPHY_CATEGORY_ID ? '3GB' : '500MB'
+  
+  if (file.size > maxSize) {
+    alert(`文件大小超过限制（最大${maxSizeText}）`)
     return
   }
   

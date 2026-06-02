@@ -391,10 +391,17 @@ def upload_video():
         file.seek(0)
 
         biography_category_id = 5
-        if int(category_id) == biography_category_id:
-            if file_size > MAX_FILE_SIZE_BIOGRAPHY:
-                return jsonify({'success': False, 'error': '文件大小超过限制（人物传记类最大3GB）'}), 400
-        else:
+        logger.info(f"上传视频 - category_id: '{category_id}', type: {type(category_id)}, file_size: {file_size}")
+        try:
+            cat_id = int(category_id)
+            if cat_id == biography_category_id:
+                if file_size > MAX_FILE_SIZE_BIOGRAPHY:
+                    return jsonify({'success': False, 'error': '文件大小超过限制（人物传记类最大3GB）'}), 400
+            else:
+                if file_size > MAX_FILE_SIZE:
+                    return jsonify({'success': False, 'error': '文件大小超过限制（最大500MB）'}), 400
+        except ValueError:
+            logger.error(f"category_id 转换失败: {category_id}")
             if file_size > MAX_FILE_SIZE:
                 return jsonify({'success': False, 'error': '文件大小超过限制（最大500MB）'}), 400
 
