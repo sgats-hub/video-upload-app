@@ -8,7 +8,17 @@
     <div v-else class="video-grid">
       <div v-for="video in videos" :key="video.id" class="video-card">
         <div class="video-thumbnail" @click="playVideo(video.url)">
-          <video :src="video.url" controlslist="nodownload" class="video-preview" preload="none">
+          <video 
+            :src="video.url" 
+            controlslist="nodownload" 
+            class="video-preview" 
+            preload="none"
+            playsinline
+            webkit-playsinline
+            x5-video-player-type="h5"
+            x5-video-player-fullscreen="true"
+            x5-video-orientation="portrait"
+          >
             您的浏览器不支持视频播放
           </video>
           <div class="play-overlay">▶️</div>
@@ -36,9 +46,18 @@
     <div v-if="playingVideo" class="modal-overlay" @click="playingVideo = null">
       <div class="modal-content" @click.stop>
         <button class="close-btn" @click="playingVideo = null">✕</button>
-        <video :src="playingVideo" controls class="full-video">
-          您的浏览器不支持视频播放
-        </video>
+        <video 
+            :src="playingVideo" 
+            controls 
+            class="full-video"
+            playsinline
+            webkit-playsinline
+            x5-video-player-type="h5"
+            x5-video-player-fullscreen="true"
+            x5-video-orientation="portrait"
+          >
+            您的浏览器不支持视频播放
+          </video>
       </div>
     </div>
     
