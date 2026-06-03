@@ -41,6 +41,18 @@
             ←
           </button>
           <span class="page-info">第 {{ currentPageNum }} / {{ totalPages }} 页 (共 {{ totalVideos }} 个视频)</span>
+          <div class="page-jump">
+            <input 
+              type="number" 
+              v-model="jumpPageNum" 
+              class="jump-input" 
+              :min="1" 
+              :max="totalPages"
+              placeholder="页码"
+              @keyup.enter="handleJumpPage"
+            />
+            <button class="jump-btn" @click="handleJumpPage">跳转</button>
+          </div>
           <button 
             class="page-btn" 
             :disabled="currentPageNum >= totalPages" 
@@ -138,6 +150,18 @@
                 ←
               </button>
               <span class="page-info">第 {{ currentPageNum }} / {{ totalPages }} 页 (共 {{ totalVideos }} 个视频)</span>
+              <div class="page-jump">
+                <input 
+                  type="number" 
+                  v-model="jumpPageNum" 
+                  class="jump-input" 
+                  :min="1" 
+                  :max="totalPages"
+                  placeholder="页码"
+                  @keyup.enter="handleJumpPage"
+                />
+                <button class="jump-btn" @click="handleJumpPage">跳转</button>
+              </div>
               <button 
                 class="page-btn" 
                 :disabled="currentPageNum >= totalPages" 
@@ -338,9 +362,10 @@ const viewerSelectedCategory = ref(null)
 // 搜索和分页
 const searchKeyword = ref('')
 const currentPageNum = ref(1)
-const perPage = ref(10)
+const perPage = ref(30)
 const totalPages = ref(1)
 const totalVideos = ref(0)
+const jumpPageNum = ref('')
 
 // 密码修改
 const showChangePwd = ref(false)
@@ -581,7 +606,19 @@ const handleSearch = () => {
 // 分页
 const goToPage = (page) => {
   if (page < 1 || page > totalPages.value) return
-  loadVideos(page, searchKeyword.value, selectedCategory.value)
+  const category_id = currentPage.value === 'viewer' ? viewerSelectedCategory.value : selectedCategory.value
+  loadVideos(page, searchKeyword.value, category_id)
+}
+
+// 跳转指定页码
+const handleJumpPage = () => {
+  const page = parseInt(jumpPageNum.value)
+  if (isNaN(page) || page < 1 || page > totalPages.value) {
+    alert(`请输入有效的页码（1-${totalPages.value}）`)
+    return
+  }
+  goToPage(page)
+  jumpPageNum.value = ''
 }
 
 // 普通用户选择分类
@@ -999,6 +1036,42 @@ onMounted(async () => {
 .page-info {
   color: #666;
   font-size: 0.9rem;
+}
+
+.page-jump {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jump-input {
+  width: 60px;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.jump-input:focus {
+  outline: none;
+  border-color: #a5b4fc;
+}
+
+.jump-btn {
+  padding: 8px 15px;
+  background: linear-gradient(135deg, #a5b4fc, #c4b5fd);
+  color: #4c1d95;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.jump-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(165, 180, 252, 0.4);
 }
 
 .upload-section {

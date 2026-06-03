@@ -16,7 +16,7 @@
         </div>
         
         <div class="video-info">
-          <h4 class="video-title">{{ video.original_name }}</h4>
+          <h4 class="video-title">{{ getFileNameWithoutExtension(video.original_name) }}</h4>
           <div class="video-meta">
             <span class="meta-item">{{ video.size }}</span>
             <span class="meta-item">{{ video.uploaded_at }}</span>
@@ -94,6 +94,13 @@ const props = defineProps({
 const emit = defineEmits(['delete-video', 'video-updated'])
 
 const playingVideo = ref(null)
+
+const getFileNameWithoutExtension = (fileName) => {
+  if (!fileName) return ''
+  const lastDotIndex = fileName.lastIndexOf('.')
+  if (lastDotIndex === -1) return fileName
+  return fileName.substring(0, lastDotIndex)
+}
 const editingVideo = ref(null)
 const editForm = ref({
   name: '',
