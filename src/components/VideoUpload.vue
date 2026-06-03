@@ -65,10 +65,10 @@ const selectedCategory = ref(props.categories[0]?.id || 1)
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024
 const MAX_FILE_SIZE_BIOGRAPHY = 3 * 1024 * 1024 * 1024
-const BIOGRAPHY_CATEGORY_ID = 5
+const BIOGRAPHY_CATEGORY_ID = 7
 
 const maxFileSizeText = computed(() => {
-  return selectedCategory.value === BIOGRAPHY_CATEGORY_ID ? '3GB' : '500MB'
+  return Number(selectedCategory.value) === BIOGRAPHY_CATEGORY_ID ? '3GB' : '500MB'
 })
 
 const getCategoryName = (categoryId) => {
@@ -96,7 +96,7 @@ const handleDrop = (event) => {
 }
 
 const processFile = async (file) => {
-  const isBiography = selectedCategory.value === BIOGRAPHY_CATEGORY_ID
+  const isBiography = Number(selectedCategory.value) === BIOGRAPHY_CATEGORY_ID
   const maxSize = isBiography ? MAX_FILE_SIZE_BIOGRAPHY : MAX_FILE_SIZE
   const maxSizeText = isBiography ? '3GB' : '500MB'
   
@@ -250,7 +250,7 @@ const uploadToServerWithProgress = async (file) => {
       }
     }
     
-    xhr.timeout = 300000  // 5分钟超时
+    xhr.timeout = 900000  // 15分钟超时（支持大文件上传）
     xhr.open('POST', '/api/upload')
     xhr.send(formData)
   })
