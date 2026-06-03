@@ -391,7 +391,7 @@ def upload_video():
         file_size = file.tell()
         file.seek(0)
 
-        biography_category_id = 5
+        biography_category_id = 7
         logger.info(f"上传视频 - category_id: '{category_id}', type: {type(category_id)}, file_size: {file_size}")
         try:
             cat_id = int(category_id)
