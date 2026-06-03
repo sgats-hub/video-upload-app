@@ -345,7 +345,8 @@ def async_video_processing(app_context, temp_path, file_path, video_id, ext):
                         ffmpeg.input(temp_path)
                         .output(file_path, vcodec='libx264', crf=23, preset='fast',
                                 acodec='aac', audio_bitrate='128k', s=f"{width}x{height}",
-                                r=fps, movflags='faststart')
+                                r=fps, movflags='faststart', pix_fmt='yuv420p',
+                                **{'c:v': 'libx264'})
                         .overwrite_output().run(capture_stdout=True, capture_stderr=True)
                     )
                     success = True
