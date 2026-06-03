@@ -16,7 +16,7 @@
         <div class="upload-icon">📤</div>
         <h3>点击或拖拽视频文件到此处</h3>
         <p>支持 MP4, WebM, AVI, MOV 等格式</p>
-        <p class="hint">最大文件大小: {{ maxFileSizeText() }}</p>
+        <p class="hint">最大文件大小: {{ maxFileSizeText }}</p>
         <input type="file" ref="fileInput" accept="video/*" class="file-input" @change="handleFileSelect" />
       </div>
       
@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({
   categories: {
@@ -65,11 +65,11 @@ const selectedCategory = ref(props.categories[0]?.id || 1)
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024
 const MAX_FILE_SIZE_BIOGRAPHY = 3 * 1024 * 1024 * 1024
-const BIOGRAPHY_CATEGORY_ID = '5'
+const BIOGRAPHY_CATEGORY_ID = 5
 
-const maxFileSizeText = () => {
+const maxFileSizeText = computed(() => {
   return selectedCategory.value === BIOGRAPHY_CATEGORY_ID ? '3GB' : '500MB'
-}
+})
 
 const getCategoryName = (categoryId) => {
   const cat = props.categories.find(c => c.id === categoryId)
