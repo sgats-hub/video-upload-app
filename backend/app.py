@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # 简单的速率限制（基于IP）
 RATE_LIMIT = {}
-RATE_LIMIT_MAX = 100  # 每分钟最多100次请求
+RATE_LIMIT_MAX = 500  # 每分钟最多500次请求
 RATE_LIMIT_WINDOW = 60  # 时间窗口（秒）
 
 # 尝试导入 ffmpeg
@@ -453,7 +453,7 @@ def get_videos():
     category_id = request.args.get('category_id')
     search = request.args.get('search', '')
     page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 10))
+    per_page = int(request.args.get('per_page', 30))
     
     query = Video.query
     if category_id: query = query.filter_by(category_id=category_id)

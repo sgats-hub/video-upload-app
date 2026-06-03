@@ -569,14 +569,26 @@ const loadVideos = async (page = 1, keyword = '', category_id = null) => {
     if (keyword) params.set('search', keyword)
     if (category_id) params.set('category_id', category_id)
     
+    console.log('[loadVideos] 请求参数:', { page, perPage: perPage.value, keyword, category_id })
+    console.log('[loadVideos] 请求URL:', `/api/videos?${params.toString()}`)
+    
     const response = await fetch(`/api/videos?${params.toString()}`, { credentials: 'include' })
     const result = await response.json()
+    
+    console.log('[loadVideos] 响应结果:', result)
     
     videos.value = result.items || result
     totalPages.value = result.pages || 1
     totalVideos.value = result.total || videos.value.length
     currentPageNum.value = result.page || page
+    
+    console.log('[loadVideos] 更新后状态:', { 
+      currentPage: currentPageNum.value, 
+      totalPages: totalPages.value, 
+      videoCount: videos.value.length 
+    })
   } catch (error) {
+    console.error('[loadVideos] 错误:', error)
     videos.value = []
   }
 }
@@ -600,13 +612,19 @@ const selectCategory = (id) => {
 // 搜索
 const handleSearch = () => {
   currentPageNum.value = 1
-  loadVideos(1, searchKeyword.value, selectedCategory.value)
+  const category_id = currentPage.value === 'viewer' ? viewerSelectedCategory.value : selectedCategory.value
+  loadVideos(1, searchKeyword.value, category_id)
 }
 
 // 分页
 const goToPage = (page) => {
-  if (page < 1 || page > totalPages.value) return
+  console.log('[goToPage] 点击翻页:', { page, currentPage: currentPageNum.value, totalPages: totalPages.value })
+  if (page < 1 || page > totalPages.value) {
+    console.log('[goToPage] 页码超出范围，取消操作')
+    return
+  }
   const category_id = currentPage.value === 'viewer' ? viewerSelectedCategory.value : selectedCategory.value
+  console.log('[goToPage] 准备加载:', { page, category_id })
   loadVideos(page, searchKeyword.value, category_id)
 }
 
@@ -649,7 +667,8 @@ const handleDeleteVideo = async (id) => {
 
 // 更新视频
 const handleVideoUpdate = () => {
-  loadVideos(currentPageNum.value, searchKeyword.value, selectedCategory.value)
+  const category_id = currentPage.value === 'viewer' ? viewerSelectedCategory.value : selectedCategory.value
+  loadVideos(currentPageNum.value, searchKeyword.value, category_id)
 }
 
 onMounted(async () => {

@@ -8,7 +8,7 @@
     <div v-else class="video-grid">
       <div v-for="video in videos" :key="video.id" class="video-card">
         <div class="video-thumbnail" @click="playVideo(video.url)">
-          <video :src="video.url" controlslist="nodownload" class="video-preview">
+          <video :src="video.url" controlslist="nodownload" class="video-preview" preload="none">
             您的浏览器不支持视频播放
           </video>
           <div class="play-overlay">▶️</div>
