@@ -326,6 +326,10 @@ MAX_VIDEO_COUNT = 10000
 def async_video_processing(app_context, temp_path, file_path, video_id, ext):
     """在子线程中安全运行的视频处理逻辑"""
     with app_context:  # 必须激活 Flask 上下文才能操作数据库
+        # 延迟导入，防止循环依赖
+        from sqlalchemy.exc import OperationalError
+        import time
+        
         video = Video.query.get(video_id)
         if not video: return
         
@@ -339,14 +343,25 @@ def async_video_processing(app_context, temp_path, file_path, video_id, ext):
                 if video_stream:
                     width = video_stream['width']
                     height = video_stream['height']
-                    fps = eval(video_stream.get('r_frame_rate', '30/1'))
+                    # 健壮性处理 fps
+                    try:
+                        fps = eval(video_stream.get('r_frame_rate', '30/1'))
+                    except:
+                        fps = 30
                     
+                    # 💡 修正：移除了 **{'c:v': 'libx264'} 冲突参数
                     (
                         ffmpeg.input(temp_path)
-                        .output(file_path, vcodec='libx264', crf=23, preset='fast',
-                                acodec='aac', audio_bitrate='128k', s=f"{width}x{height}",
-                                r=fps, movflags='faststart', pix_fmt='yuv420p',
-                                **{'c:v': 'libx264'})
+                        .output(file_path, 
+                                vcodec='libx264', 
+                                crf=23, 
+                                preset='fast',
+                                acodec='aac', 
+                                audio_bitrate='128k', 
+                                s=f"{width}x{height}",
+                                r=fps, 
+                                movflags='faststart', 
+                                pix_fmt='yuv420p')
                         .overwrite_output().run(capture_stdout=True, capture_stderr=True)
                     )
                     success = True
@@ -355,24 +370,30 @@ def async_video_processing(app_context, temp_path, file_path, video_id, ext):
                 if os.path.exists(temp_path): os.remove(temp_path)
                 print(f"[后台线程] 视频 ID {video_id} 压缩成功")
             else:
-                # 压缩不可用或失败，回滚使用原始文件
                 if os.path.exists(temp_path):
                     if os.path.exists(file_path): os.remove(file_path)
                     os.rename(temp_path, file_path)
                 print(f"[后台线程] 跳过或压缩失败，已将原始文件存盘")
             
-            # 更新状态为完成，更新最终的物理文件大小
+            # 更新最终状态
             video.status = 'completed'
             video.size = os.path.getsize(file_path)
-            db.session.commit()
+            
+            # 针对 SQLite 的重试写入机制，防止锁死
+            for _ in range(3):
+                try:
+                    db.session.commit()
+                    break
+                except OperationalError:
+                    time.sleep(1) # 遇锁静默等待 1 秒再试
             
         except Exception as e:
             print(f"[后台线程] 处理视频异常: {str(e)}")
             if os.path.exists(temp_path) and not os.path.exists(file_path):
                 os.rename(temp_path, file_path)
-            video.status = 'completed'  # 即使失败也让它能看
+            video.status = 'completed'  
             db.session.commit()
-
+            
 @app.route('/api/upload', methods=['POST'])
 @admin_required
 def upload_video():
