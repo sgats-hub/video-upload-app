@@ -1412,12 +1412,13 @@ onMounted(async () => {
   overflow-y: auto;
   position: relative;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding-top: 60px;
 }
 
 .message-modal-content .close-btn {
-  position: absolute;
-  top: 15px;
-  right: 15px;
+  position: sticky;
+  top: 0;
+  float: right;
   width: 36px;
   height: 36px;
   background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
@@ -1432,6 +1433,8 @@ onMounted(async () => {
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 10;
+  margin-top: -50px;
+  margin-right: -10px;
 }
 
 .message-modal-content .close-btn:hover {
